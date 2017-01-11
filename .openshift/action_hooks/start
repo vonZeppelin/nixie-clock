@@ -1,0 +1,6 @@
+#!/bin/bash
+
+set -x
+export JAVA_HOME=/etc/alternatives/java_sdk_1.8.0
+export PATH=$JAVA_HOME/bin:$PATH
+java -jar $OPENSHIFT_REPO_DIR/target/nixieclock.jar &
