@@ -1,5 +1,5 @@
-/**
- * Copyright 2017 Leonid Bogdanov
+/*
+ * Copyright (C) 2017 Leonid Bogdanov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.lbogdanov.nixieclock;
 
 import static java.lang.System.getProperty;
@@ -22,6 +23,7 @@ import static java.time.Instant.now;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static javax.servlet.http.HttpServletResponse.SC_BAD_REQUEST;
 import static javax.servlet.http.HttpServletResponse.SC_OK;
+import static javax.servlet.http.HttpServletResponse.SC_UNAUTHORIZED;
 
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -54,9 +56,11 @@ public class App {
     private static final String TIMEZONE_API_URL = "https://maps.googleapis.com/maps/api/timezone/json";
     private static final String GEOLOCATION_API_KEY = "GL_KEY";
     private static final String TIMEZONE_API_KEY = "TZ_KEY";
+    private static final String AUTH_TOKEN = "AUTH_TOKEN";
     private static final String OPENSHIFT_IP = "OPENSHIFT_DIY_IP";
     private static final String OPENSHIFT_PORT = "OPENSHIFT_DIY_PORT";
     private static final String BSSID_QUERY_PARAM = "bssid";
+    private static final String KEY_QUERY_PARAM = "key";
     private static final String IP_ATTR = "ip";
     private static final String START_ATTR = "start";
 
@@ -78,11 +82,17 @@ public class App {
                               .ipAddress(Optional.ofNullable(getenv(OPENSHIFT_IP))
                                                  .orElse("0.0.0.0"));
         http.before((req, res) -> {
-            MDC.put(IP_ATTR, Optional.ofNullable(req.headers("X-Forwarded-For"))
-                                     .orElseGet(() -> req.ip()));
+            MDC.put(IP_ATTR, Optional.ofNullable(req.headers("x-forwarded-for"))
+                                     .orElseGet(req::ip));
+            res.type("text/plain");
+            String token = Optional.ofNullable(getenv(AUTH_TOKEN))
+                                   .orElseGet(() -> getProperty(AUTH_TOKEN));
+            if (!(token == null || token.equals(req.queryParams(KEY_QUERY_PARAM)))) {
+                log.warn("Unauthorized request to {}, rejecting", req.pathInfo());
+                throw http.halt(SC_UNAUTHORIZED, "401 Access denied");
+            }
             log.info("Request to {}, processing...", req.pathInfo());
             req.attribute(START_ATTR, nanoTime());
-            res.type("text/plain");
         });
         http.after((req, res) -> {
             long duration = NANOSECONDS.toMillis(nanoTime() - (long) req.attribute(START_ATTR));
