@@ -19,21 +19,16 @@ package org.lbogdanov.nixieclock;
 import static java.lang.System.getProperty;
 import static java.lang.System.getenv;
 import static java.lang.System.nanoTime;
-import static java.time.Instant.now;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
-import static javax.servlet.http.HttpServletResponse.SC_BAD_REQUEST;
-import static javax.servlet.http.HttpServletResponse.SC_OK;
-import static javax.servlet.http.HttpServletResponse.SC_UNAUTHORIZED;
+import static javax.servlet.http.HttpServletResponse.*;
 
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,8 +43,11 @@ import us.monoid.web.Resty;
 import us.monoid.web.Resty.Option;
 
 /**
- * Nixie clock server takes 2 or more WiFi BSSIDs as input from a client, performs geolocation to find out
- * the client's time-zone and returns current local time back to the client.
+ * Nixie Clock server can respond with:
+ * <ul>
+ *   <li> Current UTC time;
+ *   <li> UTC offset based on 2 or more WiFi BSSIDs taken as input from a client.
+ * </ul>
  */
 public class App {
     private static final String GEOLOCATION_API_URL = "https://www.googleapis.com/geolocation/v1/geolocate";
@@ -72,9 +70,15 @@ public class App {
      * @param args the command line args
      */
     public static void main(String[] args) {
+        Pattern commaSplitter = Pattern.compile(",");
+        Pattern bssidValidator = Pattern.compile("^(?:\\p{XDigit}{2}:){5}\\p{XDigit}{2}$");
         Option restyTimeout = Option.timeout(5000);
-        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
-                                                           .withZone(ZoneOffset.UTC);
+        String authToken = Optional.ofNullable(getenv(AUTH_TOKEN))
+                                   .orElseGet(() -> getProperty(AUTH_TOKEN));
+        String geoKey = Optional.ofNullable(getenv(GEOLOCATION_API_KEY))
+                                .orElseGet(() -> getProperty(GEOLOCATION_API_KEY));
+        String tzKey = Optional.ofNullable(getenv(TIMEZONE_API_KEY))
+                               .orElseGet(() -> getProperty(TIMEZONE_API_KEY));
         Service http = Service.ignite()
                               .port(Optional.ofNullable(getenv(OPENSHIFT_PORT))
                                             .map(Integer::valueOf)
@@ -85,9 +89,7 @@ public class App {
             MDC.put(IP_ATTR, Optional.ofNullable(req.headers("x-forwarded-for"))
                                      .orElseGet(req::ip));
             res.type("text/plain");
-            String token = Optional.ofNullable(getenv(AUTH_TOKEN))
-                                   .orElseGet(() -> getProperty(AUTH_TOKEN));
-            if (!(token == null || token.equals(req.queryParams(KEY_QUERY_PARAM)))) {
+            if (!(authToken == null || authToken.equals(req.queryParams(KEY_QUERY_PARAM)))) {
                 log.warn("Unauthorized request to {}, rejecting", req.pathInfo());
                 throw http.halt(SC_UNAUTHORIZED, "401 Access denied");
             }
@@ -96,15 +98,13 @@ public class App {
         });
         http.after((req, res) -> {
             long duration = NANOSECONDS.toMillis(nanoTime() - (long) req.attribute(START_ATTR));
-            log.info("Request completed at {} ms", duration);
+            log.info("Request completed in {} ms", duration);
             MDC.remove(IP_ATTR);
         });
         http.notFound((req, res) -> "404 Not found");
         http.internalServerError((req, res) -> "500 Internal Error");
         http.get("/about", (req, res) -> "Nixie Clock Server v1.0");
-        http.get("/time", (req, res) -> {
-            Pattern commaSplitter = Pattern.compile(",");
-            Pattern bssidValidator = Pattern.compile("^(?:\\p{XDigit}{2}:){5}\\p{XDigit}{2}$");
+        http.get("/timezone", (req, res) -> {
             String[] bssids = req.queryParamsValues(BSSID_QUERY_PARAM);
             if (bssids == null) {
                 throw http.halt(SC_BAD_REQUEST, BSSID_QUERY_PARAM + " query parameter is absent");
@@ -132,17 +132,15 @@ public class App {
 
                 JSONObject geoInput = new JSONObject().put("considerIp", false)
                                                       .put("wifiAccessPoints", new JSONArray(wifiAPs));
-                String geoParams = toParams("key", Optional.ofNullable(getenv(GEOLOCATION_API_KEY))
-                                                           .orElseGet(() -> getProperty(GEOLOCATION_API_KEY)));
+                String geoParams = toParams("key", geoKey);
                 JSONResource geoOutput = resty.json(GEOLOCATION_API_URL + "?" + geoParams, Resty.content(geoInput));
                 if (!geoOutput.status(SC_OK)) {
                     throw new Exception(geoOutput.http().getResponseMessage());
                 }
 
-                String tzParams = toParams("key", Optional.ofNullable(getenv(TIMEZONE_API_KEY))
-                                                          .orElseGet(() -> getProperty(TIMEZONE_API_KEY)),
+                String tzParams = toParams("key", tzKey,
                                            "location", geoOutput.get("location.lat") + "," + geoOutput.get("location.lng"),
-                                           "timestamp", now().getEpochSecond());
+                                           "timestamp", geoOutput.http().getDate() / 1000);
                 JSONResource tzOutput = resty.json(TIMEZONE_API_URL + "?" + tzParams);
                 if (!geoOutput.status(SC_OK)) {
                     throw new Exception(geoOutput.http().getResponseMessage());
@@ -154,8 +152,30 @@ public class App {
                 log.error("Couldn't find out timezone, will use UTC", e);
             }
 
-            Instant local = now().plusSeconds(rawOffset + dstOffset);
-            return String.format("%d%n%s", local.getEpochSecond(), timeFormatter.format(local));
+            return rawOffset + dstOffset;
+        });
+        http.get("/time", (req, res) -> {
+            long time = Stream.of("pool.ntp.org", "time.nist.gov", "time.windows.com")
+                              .parallel()
+                              .map(host -> {
+                                  SntpClient client = new SntpClient();
+                                  return new Object[] {
+                                      client,
+                                      client.requestTime(host, 1000)
+                                  };
+                              })
+                             .filter(pair -> Boolean.TRUE.equals(pair[1]))
+                             .findAny()
+                             .map(pair -> {
+                                 SntpClient client = (SntpClient) pair[0];
+                                 long diff = NANOSECONDS.toMillis(System.nanoTime()) - client.getNtpTimeReference();
+                                 return client.getNtpTime() + diff;
+                             })
+                             .orElseThrow(() -> {
+                                 log.error("Couldn't retrieve NTP time");
+                                 return http.halt(SC_BAD_GATEWAY, "Couldn't retrieve NTP time");
+                             });
+            return time / 1000;
         });
     }
 
