@@ -21,6 +21,7 @@ import static java.lang.System.getenv;
 import static java.lang.System.nanoTime;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static javax.servlet.http.HttpServletResponse.*;
+import static spark.Spark.*;
 
 import java.util.Arrays;
 import java.util.List;
@@ -34,7 +35,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
-import spark.Service;
 import us.monoid.json.JSONArray;
 import us.monoid.json.JSONException;
 import us.monoid.json.JSONObject;
@@ -79,35 +79,34 @@ public class App {
                                 .orElseGet(() -> getProperty(GEOLOCATION_API_KEY));
         String tzKey = Optional.ofNullable(getenv(TIMEZONE_API_KEY))
                                .orElseGet(() -> getProperty(TIMEZONE_API_KEY));
-        Service http = Service.ignite()
-                              .port(Optional.ofNullable(getenv(OPENSHIFT_PORT))
-                                            .map(Integer::valueOf)
-                                            .orElse(8080))
-                              .ipAddress(Optional.ofNullable(getenv(OPENSHIFT_IP))
-                                                 .orElse("0.0.0.0"));
-        http.before((req, res) -> {
-            MDC.put(IP_ATTR, Optional.ofNullable(req.headers("x-forwarded-for"))
-                                     .orElseGet(req::ip));
+
+        port(Optional.ofNullable(getenv(OPENSHIFT_PORT))
+                     .map(Integer::valueOf)
+                     .orElse(8080));
+        ipAddress(Optional.ofNullable(getenv(OPENSHIFT_IP))
+                          .orElse("0.0.0.0"));
+        before((req, res) -> {
+            MDC.put(IP_ATTR, req.ip());
             res.type("text/plain");
             if (!(authToken == null || authToken.equals(req.queryParams(KEY_QUERY_PARAM)))) {
                 log.warn("Unauthorized request to {}, rejecting", req.pathInfo());
-                throw http.halt(SC_UNAUTHORIZED, "401 Access denied");
+                throw halt(SC_UNAUTHORIZED, "401 Access denied");
             }
             log.info("Request to {}, processing...", req.pathInfo());
             req.attribute(START_ATTR, nanoTime());
         });
-        http.after((req, res) -> {
+        after((req, res) -> {
             long duration = NANOSECONDS.toMillis(nanoTime() - (long) req.attribute(START_ATTR));
             log.info("Request completed in {} ms", duration);
             MDC.remove(IP_ATTR);
         });
-        http.notFound((req, res) -> "404 Not found");
-        http.internalServerError((req, res) -> "500 Internal Error");
-        http.get("/about", (req, res) -> "Nixie Clock Server v1.0");
-        http.get("/timezone", (req, res) -> {
+        notFound((req, res) -> "404 Not found");
+        internalServerError((req, res) -> "500 Internal Error");
+        get("/about", (req, res) -> "Nixie Clock Server v1.0");
+        get("/timezone", (req, res) -> {
             String[] bssids = req.queryParamsValues(BSSID_QUERY_PARAM);
             if (bssids == null) {
-                throw http.halt(SC_BAD_REQUEST, BSSID_QUERY_PARAM + " query parameter is absent");
+                throw halt(SC_BAD_REQUEST, BSSID_QUERY_PARAM + " query parameter is absent");
             }
             JSONObject[] wifiAPs = Arrays.stream(bssids)
                                          .flatMap(commaSplitter::splitAsStream)
@@ -118,11 +117,11 @@ public class App {
                                                  }
                                              } catch (JSONException | NullPointerException ignore) {}
                                              log.warn("Ivalid BSSID {}", bssid);
-                                             throw http.halt(SC_BAD_REQUEST, "Invalid BSSID " + bssid);
+                                             throw halt(SC_BAD_REQUEST, "Invalid BSSID " + bssid);
                                          })
                                          .toArray(JSONObject[]::new);
             if (wifiAPs.length < 2) {
-                throw http.halt(SC_BAD_REQUEST, "2 or more WiFi BSSIDs are required");
+                throw halt(SC_BAD_REQUEST, "2 or more WiFi BSSIDs are required");
             }
 
             int rawOffset = 0;
@@ -154,7 +153,7 @@ public class App {
 
             return rawOffset + dstOffset;
         });
-        http.get("/time", (req, res) -> {
+        get("/time", (req, res) -> {
             long time = Stream.of("pool.ntp.org", "time.nist.gov", "time.windows.com")
                               .parallel()
                               .map(host -> {
@@ -173,7 +172,7 @@ public class App {
                              })
                              .orElseThrow(() -> {
                                  log.error("Couldn't retrieve NTP time");
-                                 return http.halt(SC_BAD_GATEWAY, "Couldn't retrieve NTP time");
+                                 return halt(SC_BAD_GATEWAY, "Couldn't retrieve NTP time");
                              });
             return time / 1000;
         });
