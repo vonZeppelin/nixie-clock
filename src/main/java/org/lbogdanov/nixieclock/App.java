@@ -24,23 +24,18 @@ import static javax.servlet.http.HttpServletResponse.*;
 import static spark.Spark.*;
 
 import java.util.Arrays;
-import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import org.lbogdanov.nixieclock.googleapis.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
-import us.monoid.json.JSONArray;
-import us.monoid.json.JSONException;
-import us.monoid.json.JSONObject;
-import us.monoid.web.JSONResource;
-import us.monoid.web.Resty;
-import us.monoid.web.Resty.Option;
+import retrofit2.Response;
+import retrofit2.Retrofit;
+import retrofit2.converter.gson.GsonConverterFactory;
 
 /**
  * Nixie Clock server can respond with:
@@ -50,8 +45,6 @@ import us.monoid.web.Resty.Option;
  * </ul>
  */
 public class App {
-    private static final String GEOLOCATION_API_URL = "https://www.googleapis.com/geolocation/v1/geolocate";
-    private static final String TIMEZONE_API_URL = "https://maps.googleapis.com/maps/api/timezone/json";
     private static final String GEOLOCATION_API_KEY = "GL_KEY";
     private static final String TIMEZONE_API_KEY = "TZ_KEY";
     private static final String AUTH_TOKEN = "AUTH_TOKEN";
@@ -72,13 +65,17 @@ public class App {
     public static void main(String[] args) {
         Pattern commaSplitter = Pattern.compile(",");
         Pattern bssidValidator = Pattern.compile("^(?:\\p{XDigit}{2}:){5}\\p{XDigit}{2}$");
-        Option restyTimeout = Option.timeout(5000);
         String authToken = Optional.ofNullable(getenv(AUTH_TOKEN))
                                    .orElseGet(() -> getProperty(AUTH_TOKEN));
         String geoKey = Optional.ofNullable(getenv(GEOLOCATION_API_KEY))
                                 .orElseGet(() -> getProperty(GEOLOCATION_API_KEY));
         String tzKey = Optional.ofNullable(getenv(TIMEZONE_API_KEY))
                                .orElseGet(() -> getProperty(TIMEZONE_API_KEY));
+        GoogleApis googleApis = new Retrofit.Builder()
+                                            .baseUrl(GoogleApis.BASE_URL)
+                                            .addConverterFactory(GsonConverterFactory.create())
+                                            .build()
+                                            .create(GoogleApis.class);
 
         port(Optional.ofNullable(getenv(OPENSHIFT_PORT))
                      .map(Integer::valueOf)
@@ -108,50 +105,39 @@ public class App {
             if (bssids == null) {
                 throw halt(SC_BAD_REQUEST, BSSID_QUERY_PARAM + " query parameter is absent");
             }
-            JSONObject[] wifiAPs = Arrays.stream(bssids)
-                                         .flatMap(commaSplitter::splitAsStream)
-                                         .map(bssid -> {
-                                             try {
-                                                 if (bssidValidator.matcher(bssid).matches()) {
-                                                     return new JSONObject().put("macAddress", bssid);
-                                                 }
-                                             } catch (JSONException | NullPointerException ignore) {}
-                                             log.warn("Ivalid BSSID {}", bssid);
-                                             throw halt(SC_BAD_REQUEST, "Invalid BSSID " + bssid);
-                                         })
-                                         .toArray(JSONObject[]::new);
+            WiFiAccessPoint[] wifiAPs = Arrays.stream(bssids)
+                                              .flatMap(commaSplitter::splitAsStream)
+                                              .map(bssid -> {
+                                                  if (bssid != null && bssidValidator.matcher(bssid).matches()) {
+                                                      return new WiFiAccessPoint(bssid);
+                                                  }
+                                                  log.warn("Ivalid BSSID {}", bssid);
+                                                  throw halt(SC_BAD_REQUEST, "Invalid BSSID " + bssid);
+                                              })
+                                             .toArray(WiFiAccessPoint[]::new);
             if (wifiAPs.length < 2) {
                 throw halt(SC_BAD_REQUEST, "2 or more WiFi BSSIDs are required");
             }
 
-            int rawOffset = 0;
-            int dstOffset = 0;
-            try {
-                Resty resty = new Resty(restyTimeout);
-
-                JSONObject geoInput = new JSONObject().put("considerIp", false)
-                                                      .put("wifiAccessPoints", new JSONArray(wifiAPs));
-                String geoParams = toParams("key", geoKey);
-                JSONResource geoOutput = resty.json(GEOLOCATION_API_URL + "?" + geoParams, Resty.content(geoInput));
-                if (!geoOutput.status(SC_OK)) {
-                    throw new Exception(geoOutput.http().getResponseMessage());
-                }
-
-                String tzParams = toParams("key", tzKey,
-                                           "location", geoOutput.get("location.lat") + "," + geoOutput.get("location.lng"),
-                                           "timestamp", geoOutput.http().getDate() / 1000);
-                JSONResource tzOutput = resty.json(TIMEZONE_API_URL + "?" + tzParams);
-                if (!geoOutput.status(SC_OK)) {
-                    throw new Exception(geoOutput.http().getResponseMessage());
-                }
-
-                rawOffset = ((Number) tzOutput.get("rawOffset")).intValue();
-                dstOffset = ((Number) tzOutput.get("dstOffset")).intValue();
-            } catch (Exception e) {
-                log.error("Couldn't find out timezone, will use UTC", e);
+            Response<GeoResponse> geoOutput = googleApis.geolocate(geoKey, new GeoRequest(wifiAPs)).execute();
+            if (!geoOutput.isSuccessful()) {
+                String msg = geoOutput.code() + " " + geoOutput.message();
+                log.error("Couldn't perform geolocation: {}", msg);
+                throw halt(SC_INTERNAL_SERVER_ERROR, msg);
             }
 
-            return rawOffset + dstOffset;
+            GeoResponse.Location location = geoOutput.body().getLocation();
+            String locationParam = location.getLat() + "," + location.getLng();
+            long timestamp = geoOutput.headers().getDate("Date").toInstant().getEpochSecond();
+            Response<TimezoneResponse> tzOutput = googleApis.timezone(tzKey, locationParam, timestamp).execute();
+            if (!tzOutput.isSuccessful()) {
+                String msg = tzOutput.code() + " " + tzOutput.message();
+                log.error("Couldn't find time zone: {}", msg);
+                throw halt(SC_INTERNAL_SERVER_ERROR, msg);
+            }
+
+            TimezoneResponse timezone = tzOutput.body();
+            return timezone.getRawOffset() + timezone.getDstOffset();
         });
         get("/time", (req, res) -> {
             long time = Stream.of("pool.ntp.org", "time.nist.gov", "time.windows.com")
@@ -176,16 +162,5 @@ public class App {
                              });
             return time / 1000;
         });
-    }
-
-    private static String toParams(Object... kvs) {
-        assert kvs.length % 2 == 0;
-        List<Object> params = Arrays.asList(kvs);
-        return IntStream.range(0, params.size() / 2)
-                        .mapToObj(i -> params.subList(i * 2, (i + 1) * 2))
-                        .map(kv -> kv.stream()
-                                     .map(s -> Resty.enc(String.valueOf(s)))
-                                     .collect(Collectors.joining("=")))
-                        .collect(Collectors.joining("&"));
     }
 }
