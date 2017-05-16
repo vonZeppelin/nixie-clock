@@ -94,8 +94,7 @@ public class SntpClient {
             long roundTripTime = responseTicks - requestTicks - (transmitTime - receiveTime);
             long clockOffset = ((receiveTime - originateTime) + (transmitTime - responseTime)) / 2;
 
-            // save our results - use the times on this side of the network latency (response rather
-            // than request time)
+            // save our results - use the times on this side of the network latency (response rather than request time)
             mNtpTime = responseTime + clockOffset;
             mNtpTimeReference = responseTicks;
             mRoundTripTime = roundTripTime;

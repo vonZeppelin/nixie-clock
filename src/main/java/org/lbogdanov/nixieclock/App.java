@@ -23,6 +23,7 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static javax.servlet.http.HttpServletResponse.*;
 import static spark.Spark.*;
 
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.regex.Pattern;
@@ -51,6 +52,7 @@ public class App {
     private static final String OPENSHIFT_IP = "OPENSHIFT_DIY_IP";
     private static final String OPENSHIFT_PORT = "OPENSHIFT_DIY_PORT";
     private static final String BSSID_QUERY_PARAM = "bssid";
+    private static final String NTP_QUERY_PARAM = "ntp";
     private static final String KEY_QUERY_PARAM = "key";
     private static final String IP_ATTR = "ip";
     private static final String START_ATTR = "start";
@@ -140,6 +142,10 @@ public class App {
             return timezone.getRawOffset() + timezone.getDstOffset();
         });
         get("/time", (req, res) -> {
+            boolean useNTP = Boolean.parseBoolean(req.queryParamOrDefault(NTP_QUERY_PARAM, "true"));
+            if (!useNTP) {
+                return Instant.now().getEpochSecond();
+            }
             long time = Stream.of("pool.ntp.org", "time.nist.gov", "time.windows.com")
                               .parallel()
                               .map(host -> {
