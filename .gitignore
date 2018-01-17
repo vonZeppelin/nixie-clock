@@ -1,6 +1,7 @@
-.idea/
 .settings/
+arduino/.pioenvs/
+arduino/data
+arduino/src/.venv
 target/
 .classpath
 .project
-*.iml

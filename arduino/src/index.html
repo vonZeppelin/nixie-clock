@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Nixie Clock</title>
+    <link rel="stylesheet" href="chota.css">
+  </head>
+  <body>
+    <div class="container">
+      <nav class="tabs is-right">
+        <a href="#" data-tab="#settings" class="active">Settings</a>
+        <a href="#" data-tab="#update">Firmware update</a>
+      </nav>
+      <p></p>
+      <div id="settings" class="row">
+        <div class="col-3"></div>
+        <div class="col">
+          <form method="POST" action="/settings" enctype="application/x-www-form-urlencoded">
+            <fieldset>
+              <legend>Settings</legend>
+              <span class="is-center"></span>
+              <p>
+                <label>Network name:</label>
+                <input type="text" name="ssid" placeholder="SSID" maxlength="32">
+              </p>
+              <p>
+                <label>WPA/WPA2 password:</label>
+                <input type="password" name="ssid-psk" placeholder="SSID PSK">
+              </p>
+              <p>
+                <label>Nixie Clock server:</label>
+                <input type="url" name="nixie-server" placeholder="http://">
+              </p>
+              <p>
+                <label>
+                  Timezone:
+                  <input type="radio" name="tz" value="auto" checked> Autodetect
+                  <input type="radio" name="tz" value="manual"> Manual
+                </label>
+                <select id="tz" name="tz-override" class="is-hidden">
+                  <option value="-12:00">(GMT -12:00) Eniwetok, Kwajalein</option>
+                  <option value="-11:00">(GMT -11:00) Midway Island, Samoa</option>
+                  <option value="-10:00">(GMT -10:00) Hawaii</option>
+                  <option value="-09:50">(GMT -9:30) Taiohae</option>
+                  <option value="-09:00">(GMT -9:00) Alaska</option>
+                  <option value="-08:00">(GMT -8:00) Pacific Time (US &amp; Canada)</option>
+                  <option value="-07:00">(GMT -7:00) Mountain Time (US &amp; Canada)</option>
+                  <option value="-06:00">(GMT -6:00) Central Time (US &amp; Canada), Mexico City</option>
+                  <option value="-05:00">(GMT -5:00) Eastern Time (US &amp; Canada), Bogota, Lima</option>
+                  <option value="-04:50">(GMT -4:30) Caracas</option>
+                  <option value="-04:00">(GMT -4:00) Atlantic Time (Canada), Caracas, La Paz</option>
+                  <option value="-03:50">(GMT -3:30) Newfoundland</option>
+                  <option value="-03:00">(GMT -3:00) Brazil, Buenos Aires, Georgetown</option>
+                  <option value="-02:00">(GMT -2:00) Mid-Atlantic</option>
+                  <option value="-01:00">(GMT -1:00) Azores, Cape Verde Islands</option>
+                  <option value="+00:00" selected>(GMT) Western Europe Time, London, Lisbon, Casablanca</option>
+                  <option value="+01:00">(GMT +1:00) Brussels, Copenhagen, Madrid, Paris</option>
+                  <option value="+02:00">(GMT +2:00) Kaliningrad, South Africa</option>
+                  <option value="+03:00">(GMT +3:00) Baghdad, Riyadh, Moscow, St. Petersburg</option>
+                  <option value="+03:50">(GMT +3:30) Tehran</option>
+                  <option value="+04:00">(GMT +4:00) Abu Dhabi, Muscat, Baku, Tbilisi</option>
+                  <option value="+04:50">(GMT +4:30) Kabul</option>
+                  <option value="+05:00">(GMT +5:00) Ekaterinburg, Islamabad, Karachi, Tashkent</option>
+                  <option value="+05:50">(GMT +5:30) Bombay, Calcutta, Madras, New Delhi</option>
+                  <option value="+05:75">(GMT +5:45) Kathmandu, Pokhara</option>
+                  <option value="+06:00">(GMT +6:00) Almaty, Dhaka, Colombo</option>
+                  <option value="+06:50">(GMT +6:30) Yangon, Mandalay</option>
+                  <option value="+07:00">(GMT +7:00) Bangkok, Hanoi, Jakarta</option>
+                  <option value="+08:00">(GMT +8:00) Beijing, Perth, Singapore, Hong Kong</option>
+                  <option value="+08:75">(GMT +8:45) Eucla</option>
+                  <option value="+09:00">(GMT +9:00) Tokyo, Seoul, Osaka, Sapporo, Yakutsk</option>
+                  <option value="+09:50">(GMT +9:30) Adelaide, Darwin</option>
+                  <option value="+10:00">(GMT +10:00) Eastern Australia, Guam, Vladivostok</option>
+                  <option value="+10:50">(GMT +10:30) Lord Howe Island</option>
+                  <option value="+11:00">(GMT +11:00) Magadan, Solomon Islands, New Caledonia</option>
+                  <option value="+11:50">(GMT +11:30) Norfolk Island</option>
+                  <option value="+12:00">(GMT +12:00) Auckland, Wellington, Fiji, Kamchatka</option>
+                  <option value="+12:75">(GMT +12:45) Chatham Islands</option>
+                  <option value="+13:00">(GMT +13:00) Apia, Nukualofa</option>
+                  <option value="+14:00">(GMT +14:00) Line Islands, Tokelau</option>
+                </select>
+              </p>
+              <p class="is-center">
+                <input type="submit" value="Save">
+              </p>
+            </fieldset>
+          </form>
+        </div>
+        <div class="col-3"></div>
+      </div>
+      <div id="update" class="row is-hidden">
+        <div class="col-3"></div>
+        <div class="col">
+          <form method="POST" action="/update" enctype="multipart/form-data">
+            <fieldset>
+              <legend>Firmware update</legend>
+              <span class="is-center"></span>
+              <p>
+                <label>File:</label>
+                <input type="file" name="firmware">
+              </p>
+              <p class="is-center">
+                <input type="submit" value="Update">
+              </p>
+            </fieldset>
+          </form>
+        </div>
+        <div class="col-3"></div>
+      </div>
+    </div>
+    <script src="zepto.js"></script>
+    <script type="text/javascript">
+      Zepto(function($) {
+        var tabLinks = $('.tabs > a'),
+            tabs = $('.container > div[id]'),
+            tzSelect = $('#tz'),
+            setMessage = function(form, text, isError) {
+              $('span', form).first().text(text).css('color', isError ? 'red' : 'green');
+            };
+
+        tabLinks.click(function() {
+          var link = $(this);
+          tabLinks.removeClass('active');
+          link.addClass('active');
+          tabs.addClass('is-hidden');
+          $(link.data('tab')).removeClass('is-hidden');
+          return false;
+        });
+
+        $('input[name=tz]').change(function() {
+          tzSelect.toggleClass('is-hidden', $(this).val() !== 'manual');
+        });
+
+        $('#settings form').submit(function() {
+          var form = this;
+          $.ajax({
+            data: $(form).serialize(),
+            type: form.method,
+            url: form.action,
+            dataType: 'text',
+            timeout: 15000,
+            error: function(_, _, error) {
+              setMessage(form, "Couldn't save settings: " + error, true);
+            },
+            success: function(data) {
+              setMessage(form, "Settings saved!", false);
+            }
+          });
+          return false;
+        });
+
+        $('#update form').submit(function() {
+          var form = this;
+          $.ajax({
+            data: new FormData(form),
+            type: form.method,
+            url: form.action,
+            contentType: false,
+            dataType: 'text',
+            processData: false,
+            timeout: 15000,
+            error: function(_, _, error) {
+              setMessage(form, "Couldn't update firmware: " + error, true);
+            },
+            success: function(data) {
+              if (data.toLowerCase().indexOf('success') < 0) {
+                setMessage(form, data, true);
+              } else {
+                setMessage(form, "Firmware updated! Rebooting...", false);
+                setTimeout(function() { location.reload(); }, 15000);
+              }
+            }
+          });
+          return false;
+        });
+      });
+    </script>
+  </body>
+</html>
