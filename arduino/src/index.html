@@ -23,23 +23,23 @@
               <span class="is-center"></span>
               <p>
                 <label>Network name:</label>
-                <input type="text" name="ssid" placeholder="SSID" maxlength="32">
+                <input type="text" name="ssid" placeholder="SSID" maxlength="32" required>
               </p>
               <p>
                 <label>WPA/WPA2 password:</label>
-                <input type="password" name="ssid-psk" placeholder="SSID PSK">
+                <input type="password" name="ssid-psk" placeholder="SSID PSK" maxlength="63">
               </p>
               <p>
                 <label>Nixie Clock server:</label>
-                <input type="url" name="nixie-server" placeholder="http://">
+                <input type="url" name="server-url" placeholder="host.domain:port" required>
               </p>
               <p>
                 <label>
-                  Timezone:
-                  <input type="radio" name="tz" value="auto" checked> Autodetect
-                  <input type="radio" name="tz" value="manual"> Manual
+                  <input type="checkbox" name="tz" value="detect" checked> Autodetect timezone
                 </label>
-                <select id="tz" name="tz-override" class="is-hidden">
+              </p>
+              <p>
+                <select name="tz-override" class="is-hidden">
                   <option value="-12:00">(GMT -12:00) Eniwetok, Kwajalein</option>
                   <option value="-11:00">(GMT -11:00) Midway Island, Samoa</option>
                   <option value="-10:00">(GMT -10:00) Hawaii</option>
@@ -115,8 +115,8 @@
       Zepto(function($) {
         var tabLinks = $('.tabs > a'),
             tabs = $('.container > div[id]'),
-            tzSelect = $('#tz'),
-            setMessage = function(form, text, isError) {
+            tzSelect = $('select[name=tz-override]'),
+            displayMessage = function(form, text, isError) {
               $('span', form).first().text(text).css('color', isError ? 'red' : 'green');
             };
 
@@ -130,7 +130,20 @@
         });
 
         $('input[name=tz]').change(function() {
-          tzSelect.toggleClass('is-hidden', $(this).val() !== 'manual');
+          tzSelect.toggleClass('is-hidden', $(this).is(':checked'));
+        });
+
+        $.getJSON('/settings', function(data) {
+          $.each(data, function(setting, value) {
+            var selector = 'input[name=%],select[name=%]'.replace(/%/g, setting),
+                input = $(selector);
+            if (input.attr('type') === 'checkbox') {
+              input.prop('checked', value === input.prop('value'));
+            } else {
+              input.val(value);
+            }
+            input.change();
+          });
         });
 
         $('#settings form').submit(function() {
@@ -141,11 +154,11 @@
             url: form.action,
             dataType: 'text',
             timeout: 15000,
-            error: function(_, _, error) {
-              setMessage(form, "Couldn't save settings: " + error, true);
+            error: function(xhr, errorType, error) {
+              displayMessage(form, "Couldn't save settings: " + (error || "N/A"), true);
             },
             success: function(data) {
-              setMessage(form, "Settings saved!", false);
+              displayMessage(form, "Settings saved!", false);
             }
           });
           return false;
@@ -161,14 +174,14 @@
             dataType: 'text',
             processData: false,
             timeout: 15000,
-            error: function(_, _, error) {
-              setMessage(form, "Couldn't update firmware: " + error, true);
+            error: function(xhr, errorType, error) {
+              displayMessage(form, "Couldn't update firmware: " + (error || "N/A"), true);
             },
             success: function(data) {
               if (data.toLowerCase().indexOf('success') < 0) {
-                setMessage(form, data, true);
+                displayMessage(form, data, true);
               } else {
-                setMessage(form, "Firmware updated! Rebooting...", false);
+                displayMessage(form, "Firmware updated! Rebooting...", false);
                 setTimeout(function() { location.reload(); }, 15000);
               }
             }
