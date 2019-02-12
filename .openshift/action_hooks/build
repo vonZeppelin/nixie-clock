@@ -1,8 +1,0 @@
-#!/bin/bash
-
-set -x
-export M2=$OPENSHIFT_DATA_DIR/apache-maven-3.3.9
-export JAVA_HOME=/etc/alternatives/java_sdk_1.8.0
-export PATH=$JAVA_HOME/bin:$M2/bin:$PATH
-cd $OPENSHIFT_REPO_DIR
-mvn -s .openshift/settings.xml clean package

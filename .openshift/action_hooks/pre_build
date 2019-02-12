@@ -1,9 +1,0 @@
-#!/bin/bash
-
-set -x
-cd $OPENSHIFT_DATA_DIR
-if [ ! -d apache-maven-3.3.9 ]; then
-  wget https://archive.apache.org/dist/maven/maven-3/3.3.9/binaries/apache-maven-3.3.9-bin.tar.gz
-  tar xvf *.tar.gz
-  rm -f *.tar.gz
-fi

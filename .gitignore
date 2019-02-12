@@ -1,7 +1,6 @@
-.settings/
-arduino/.pioenvs/
-arduino/data
-arduino/src/.venv
+.pioenvs/
+.piolibdeps/
+.vscode/
+data/
+src/.venv/
 target/
-.classpath
-.project
