@@ -9,9 +9,13 @@
   </head>
   <body>
     <div class="container">
-      <nav class="tabs is-right">
-        <a href="#" data-tab="#settings" class="active">Settings</a>
-        <a href="#" data-tab="#update">Firmware update</a>
+      <nav class="nav">
+        <div class="nav-right">
+          <div class="tabs">
+            <a href="#" data-tab="#settings" class="active">Settings</a>
+            <a href="#" data-tab="#update">Firmware update</a>
+          </div>
+        </div>
       </nav>
       <p></p>
       <div id="settings" class="row">
@@ -30,16 +34,14 @@
                 <input type="password" name="ssid-psk" placeholder="SSID PSK" maxlength="63">
               </p>
               <p>
-                <label>Nixie Clock server:</label>
-                <input type="url" name="server-url" placeholder="host.domain:port" required>
+                <label>Google API key:</label>
+                <input type="text" name="api-key" placeholder="API KEY" required>
               </p>
               <p>
-                <label>
-                  <input type="checkbox" name="tz" value="detect" checked> Autodetect timezone
-                </label>
-              </p>
-              <p>
-                <select name="tz-override" class="is-hidden">
+                <label>Timezone:</label>
+                <select name="tz">
+                  <option value="auto" selected>Autodetect</option>
+                  <option disabled>-----------------------</option>
                   <option value="-12:00">(GMT -12:00) Eniwetok, Kwajalein</option>
                   <option value="-11:00">(GMT -11:00) Midway Island, Samoa</option>
                   <option value="-10:00">(GMT -10:00) Hawaii</option>
@@ -55,7 +57,7 @@
                   <option value="-03:00">(GMT -3:00) Brazil, Buenos Aires, Georgetown</option>
                   <option value="-02:00">(GMT -2:00) Mid-Atlantic</option>
                   <option value="-01:00">(GMT -1:00) Azores, Cape Verde Islands</option>
-                  <option value="+00:00" selected>(GMT) Western Europe Time, London, Lisbon, Casablanca</option>
+                  <option value="+00:00">(GMT) Western Europe Time, London, Lisbon, Casablanca</option>
                   <option value="+01:00">(GMT +1:00) Brussels, Copenhagen, Madrid, Paris</option>
                   <option value="+02:00">(GMT +2:00) Kaliningrad, South Africa</option>
                   <option value="+03:00">(GMT +3:00) Baghdad, Riyadh, Moscow, St. Petersburg</option>
@@ -110,55 +112,51 @@
         <div class="col-3"></div>
       </div>
     </div>
-    <script src="zepto.js"></script>
+    <script src="jquery.js"></script>
     <script type="text/javascript">
-      Zepto(function($) {
-        var tabLinks = $('.tabs > a'),
+      jQuery(function($) {
+        var ajaxTimeout = 15000,
+            tabLinks = $('.tabs > a'),
             tabs = $('.container > div[id]'),
-            tzSelect = $('select[name=tz-override]'),
             displayMessage = function(form, text, isError) {
-              $('span', form).first().text(text).css('color', isError ? 'red' : 'green');
+              $('span', form)
+                .first()
+                .text(text)
+                .addClass(isError ? 'text-error' : 'text-success');
             };
 
         tabLinks.click(function() {
-          var link = $(this);
-          tabLinks.removeClass('active');
-          link.addClass('active');
-          tabs.addClass('is-hidden');
-          $(link.data('tab')).removeClass('is-hidden');
-          return false;
-        });
+          var activeLink = $(this),
+              activeTab = $(activeLink.data('tab'));
 
-        $('input[name=tz]').change(function() {
-          tzSelect.toggleClass('is-hidden', $(this).is(':checked'));
+          tabLinks.removeClass('active');
+          activeLink.addClass('active');
+          tabs.addClass('is-hidden');
+          activeTab.removeClass('is-hidden');
+
+          return false;
         });
 
         $.getJSON('/settings', function(data) {
           $.each(data, function(setting, value) {
             var selector = 'input[name=%],select[name=%]'.replace(/%/g, setting),
                 input = $(selector);
-            if (input.attr('type') === 'checkbox') {
-              input.prop('checked', value === input.prop('value'));
-            } else {
-              input.val(value);
-            }
-            input.change();
+            input.val(value);
           });
         });
 
         $('#settings form').submit(function() {
           var form = this;
           $.ajax({
-            data: $(form).serialize(),
-            type: form.method,
+            method: form.method,
             url: form.action,
-            dataType: 'text',
-            timeout: 15000,
+            data: $(form).serialize(),
+            timeout: ajaxTimeout,
             error: function(xhr, errorType, error) {
-              displayMessage(form, "Couldn't save settings: " + (error || "N/A"), true);
+              displayMessage(form, 'Couldn\'t save settings: ' + (error || 'N/A'), true);
             },
-            success: function(data) {
-              displayMessage(form, "Settings saved!", false);
+            success: function() {
+              displayMessage(form, 'Settings saved!', false);
             }
           });
           return false;
@@ -167,21 +165,20 @@
         $('#update form').submit(function() {
           var form = this;
           $.ajax({
-            data: new FormData(form),
-            type: form.method,
+            method: form.method,
             url: form.action,
+            data: new FormData(form),
             contentType: false,
-            dataType: 'text',
             processData: false,
-            timeout: 15000,
+            timeout: ajaxTimeout,
             error: function(xhr, errorType, error) {
-              displayMessage(form, "Couldn't update firmware: " + (error || "N/A"), true);
+              displayMessage(form, 'Couldn\'t update firmware: ' + (error || 'N/A'), true);
             },
             success: function(data) {
               if (data.toLowerCase().indexOf('success') < 0) {
                 displayMessage(form, data, true);
               } else {
-                displayMessage(form, "Firmware updated! Rebooting...", false);
+                displayMessage(form, 'Firmware updated! Rebooting...', false);
                 setTimeout(function() { location.reload(); }, 15000);
               }
             }

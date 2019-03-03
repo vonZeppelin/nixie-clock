@@ -23,14 +23,15 @@
                         </goals>
                         <configuration>
                             <target>
-                                <copy todir="${basedir}/data/">
-                                  <filelist dir="${basedir}/src"files="chota.css,zepto.js"/>
-                                </copy>
+                                <gzip src="${basedir}/src/chota.css" destfile="${basedir}/data/chota.css.gz"/>
+                                <gzip src="${basedir}/src/jquery.js" destfile="${basedir}/data/jquery.js.gz"/>
                                 <java classname="com.googlecode.htmlcompressor.CmdLineCompressor" classpathref="maven.plugin.classpath">
                                     <arg line="--compress-js --remove-intertag-spaces"/>
                                     <arg line="--output ${basedir}/data/"/>
-                                    <arg value="${basedir}/src/index.html"/>
+                                    <arg value="${basedir}/src/index.htm"/>
                                 </java>
+                                <gzip src="${basedir}/data/index.htm" destfile="${basedir}/data/index.htm.gz"/>
+                                <delete file="${basedir}/data/index.htm"/>
                                 <exec dir="${basedir}" executable="platformio">
                                     <arg value="run"/>
                                 </exec>

@@ -22,9 +22,9 @@ def update():
 def get_settings():
     settings = {
         "ssid": "WiFi SSID",
-        "server-url": "nixie-server.com:8888",
-        "tz": "detect",
-        "tz-override": "+01:00"
+        "ssid-psk": "abc",
+        "api-key": "123",
+        "tz": "+01:00"
     }
     return jsonify(settings)
 

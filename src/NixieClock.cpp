@@ -139,9 +139,7 @@ class ConfigBehavior : public BehaviorInterface {
           webServer.send(500, "text/plain", "Couldn't read config file");
         }
       });
-      webServer.serveStatic("/", SPIFFS, "/index.html", "max-age=86400");
-      webServer.serveStatic("/chota.css", SPIFFS, "/chota.css", "max-age=86400");
-      webServer.serveStatic("/zepto.js", SPIFFS, "/zepto.js", "max-age=86400");
+      webServer.serveStatic("/", SPIFFS, "/", "max-age=86400");
 
       dnsServer.setTTL(300);
       // it's OK if DNS server can't start - IP should do fine
