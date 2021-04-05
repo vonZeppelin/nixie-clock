@@ -9,7 +9,7 @@ app = Flask(__name__, static_url_path="", static_folder="")
 
 @app.route("/")
 def root():
-    return redirect("index.html")
+    return redirect("index.htm")
 
 
 @app.route("/update", methods=["POST"])

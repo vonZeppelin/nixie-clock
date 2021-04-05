@@ -20,9 +20,9 @@
 #include <ESP8266HTTPUpdateServer.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266WiFi.h>
-#include <FS.h>
+#include <LittleFS.h>
 #include <Ticker.h>
-#include <Time.h>
+#include <TimeLib.h>
 
 const char NIXIECLOCK[] PROGMEM = "nixieclock";
 
@@ -111,7 +111,7 @@ class ClocksBehavior : public IBehavior {
     void init() {
       initialized = true;
 
-      File configFile = SPIFFS.open(FPSTR(CONFIG_FILE), "r");
+      File configFile = LittleFS.open(FPSTR(CONFIG_FILE), "r");
       if (!configFile) {
         return;
       }
@@ -308,7 +308,7 @@ class ConfigBehavior : public IBehavior {
       String settingsPath = F("/settings");
       webServer.on(settingsPath, HTTP_GET, [&]() {
         String jsonStr;
-        File configFile = SPIFFS.open(FPSTR(CONFIG_FILE), "r");
+        File configFile = LittleFS.open(FPSTR(CONFIG_FILE), "r");
         if (configFile) {
           StaticJsonDocument<250> jsonDoc;
           for (int i = 0; i < CONFIG_KEYS_COUNT && configFile.available(); ++i) {
@@ -324,7 +324,7 @@ class ConfigBehavior : public IBehavior {
         webServer.send(200, FPSTR(MIME_TYPE_JSON), jsonStr);
       });
       webServer.on(settingsPath, HTTP_POST, [&]() {
-        File configFile = SPIFFS.open(FPSTR(CONFIG_FILE), "w+");
+        File configFile = LittleFS.open(FPSTR(CONFIG_FILE), "w+");
         if (configFile) {
           for (int i = 0; i < CONFIG_KEYS_COUNT; ++i) {
             ConfigKey key;
@@ -338,7 +338,7 @@ class ConfigBehavior : public IBehavior {
           webServer.send_P(500, MIME_TYPE_TEXT, PSTR("Couldn't write config file"));
         }
       });
-      webServer.serveStatic("/", SPIFFS, "/", "max-age=86400");
+      webServer.serveStatic("/", LittleFS, "/", "max-age=86400");
 
       dnsServer.setTTL(300);
       // it's OK if DNS server can't start - IP should do fine
@@ -369,7 +369,7 @@ Context context;
 
 void setup()
 {
-  if (SPIFFS.begin()) {
+  if (LittleFS.begin()) {
     context.setBehavior(new ConfigBehavior(context));
   }
 }
