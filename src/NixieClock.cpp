@@ -270,7 +270,7 @@ class ConfigBehavior : public IBehavior {
       Ticker ticker;
 
       public:
-        BehaviorSwitcher(Context &context, uint8_t idleFor = 60) {
+        BehaviorSwitcher(Context &context, uint8_t idleFor = 5) {
           ticker.once(idleFor, [&]() {
             context.setBehavior(new ClocksBehavior());
           });
@@ -369,6 +369,8 @@ Context context;
 
 void setup()
 {
+  Serial.begin(9600); // TODO REMOVE
+
   if (LittleFS.begin()) {
     context.setBehavior(new ConfigBehavior(context));
   }
